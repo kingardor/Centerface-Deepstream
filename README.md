@@ -2,7 +2,7 @@
 
 This Deepstream application showcases Centerface running at high FPS throughput!
 
-[![FPS](resources/centerface.gif)]()
+[![FPS](resources/centerface.gif)](https://www.linkedin.com/posts/akashjames_facedetection-computervision-gpu-activity-6803721379087818752-yYz4)
 
 P.S - Click the gif to watch the entire video!
 
