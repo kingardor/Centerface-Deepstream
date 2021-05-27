@@ -30,3 +30,11 @@
 *.exe
 *.out
 *.app
+
+# Models
+*.onnx
+*.engine
+
+# Input source file
+inputsources.txt
+ds-centernet
