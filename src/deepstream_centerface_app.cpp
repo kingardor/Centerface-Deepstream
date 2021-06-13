@@ -192,7 +192,7 @@ namespace CenterFace {
 
         gint class_index = obj_meta->class_id;
 
-        if(class_index == FIRE) {
+        if(class_index == FACE) {
           changeBBoxColor(obj_meta, 1, 0.0, 1.0, 0.0, 0.25);
         }
 
@@ -506,10 +506,10 @@ namespace CenterFace {
 
     tiler_rows = (guint)sqrt(num_sources);
     tiler_columns = (guint)ceil(1.0 * num_sources / tiler_rows);
+
     // Tiler Properties
     g_object_set(G_OBJECT(tiler), "rows", tiler_rows, "columns", tiler_columns,
                 "width", TILED_OUTPUT_WIDTH, "height", TILED_OUTPUT_HEIGHT, NULL);
-
     return EXIT_SUCCESS;
   }
 
@@ -533,7 +533,8 @@ int main(int argc, char *argv[]) {
   GMainLoop *loop = NULL;
   GstElement *pipeline = NULL, *streammux = NULL, *sink = NULL,
              *pgie_centerface_detector = NULL, *nvtracker = NULL,
-             *nvvidconv = NULL, *nvosd = NULL, *tiler;
+             *nvvidconv = NULL, *caps_filter = NULL, *dsexample = NULL,
+             *nvosd = NULL, *tiler = NULL;
 
   #ifdef PLATFORM_TEGRA
     GstElement *transform = NULL;
@@ -612,14 +613,6 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  // Compose all the sources into one 2D tiled window
-  tiler = gst_element_factory_make("nvmultistreamtiler", "nvtiler");
-
-  if (!tiler) {
-    g_printerr("SINK could not be created.\n");
-    return -1;
-  }
-
   // Use convertor to convert from NV12 to RGBA as required by nvosd
   nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-converter");
 
@@ -628,6 +621,10 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
+  caps_filter = gst_element_factory_make ("capsfilter", NULL);
+
+  dsexample = gst_element_factory_make ("dsexample", "example-plugin");
+
   // Create OSD to draw on the converted RGBA buffer
   nvosd = gst_element_factory_make("nvdsosd", "nv-onscreendisplay");
 
@@ -635,6 +632,7 @@ int main(int argc, char *argv[]) {
     g_printerr("NVOSD could not be created.\n");
     return -1;
   }
+
   /* Redner OSD Output */
   #ifdef PLATFORM_TEGRA
     transform = gst_element_factory_make("nvegltransform", "nvegl-transform");
@@ -645,6 +643,14 @@ int main(int argc, char *argv[]) {
   }
   else {
     sink = gst_element_factory_make("nveglglessink", "nvvideo-renderer");
+  }
+
+  // Compose all the sources into one 2D tiled window
+  tiler = gst_element_factory_make("nvmultistreamtiler", "nvtiler");
+
+  if (!tiler) {
+    g_printerr("SINK could not be created.\n");
+    return -1;
   }
 
   if (!sink) {
@@ -665,6 +671,27 @@ int main(int argc, char *argv[]) {
   if(fail_safe == -1) {
     return -1;
   }
+
+  #ifndef PLATFORM_TEGRA
+    /* Set properties of the nvvideoconvert element
+    * requires unified cuda memory for opencv blurring on CPU
+    */
+      g_object_set (G_OBJECT (nvvidconv), "nvbuf-memory-type", 1, NULL);
+  #endif
+
+  /* Set properties of the caps_filter element */
+  GstCaps *caps =
+      gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING, "RGBA",
+      NULL);
+  GstCapsFeatures *feature = gst_caps_features_new (GST_CAPS_FEATURES_NVMM, NULL);
+  gst_caps_set_features (caps, 0, feature);
+
+  g_object_set (G_OBJECT (caps_filter), "caps", caps, NULL);
+
+  /* Set properties of the dsexample element */
+  g_object_set (G_OBJECT (dsexample), "full-frame", FALSE, NULL);
+  g_object_set (G_OBJECT (dsexample), "blur-objects", TRUE, NULL);
+
   // Message Handler
   bus = gst_pipeline_get_bus(GST_PIPELINE(pipeline));
   bus_watch_id = gst_bus_add_watch(bus, nexus.bus_call, loop);
@@ -695,10 +722,10 @@ int main(int argc, char *argv[]) {
 
   #else
     gst_bin_add_many(GST_BIN(pipeline),
-                    pgie_centerface_detector, nvtracker, tiler, nvvidconv, nvosd, sink, NULL);
+                    pgie_centerface_detector, nvtracker, tiler, nvvidconv, caps_filter, dsexample, nvosd, sink, NULL);
 
     if (!gst_element_link_many(streammux, pgie_centerface_detector, nvtracker,
-                               tiler, nvvidconv, nvosd, sink, NULL)) {
+                               tiler, nvvidconv, caps_filter, dsexample, nvosd, sink, NULL)) {
       g_printerr("Elements could not be linked. Exiting.\n");
       return -1;
     }

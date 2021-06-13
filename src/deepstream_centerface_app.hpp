@@ -80,9 +80,9 @@ using namespace cv;
 #define CONFIG_GROUP_TRACKER_ENABLE_BATCH_PROCESS "enable-batch-process"
 #define CONFIG_GPU_ID "gpu-id"
 
-enum PGIE_CLASS {FIRE = 0};
+enum PGIE_CLASS {FACE = 0};
 
-enum GIE_UID {FIRE_DETECTOR = 1};
+enum GIE_UID {FACE_DETECTOR = 1};
 
 int num_sources = 0;
 
